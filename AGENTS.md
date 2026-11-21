@@ -1,10 +1,11 @@
-# Agent rules (Phase 1)
+# Agent rules (Phase 1 + Phase 2)
 
 Copyright Advanced Software and AI Solutions LLC.
 
 ## Stack
 
 - Python + FastAPI + uvicorn + httpx + pypdfium2 + Pillow + python-multipart.
+- Phase 2: official MCP Python SDK (`mcp`) package `ocr_mcp` (stdio only).
 - Static HTML/CSS/JS only (no build step, no CDN, no framework).
 - Dev: pytest, respx, ruff. Ask before adding any other dependency.
 
@@ -17,15 +18,19 @@ Copyright Advanced Software and AI Solutions LLC.
 - Settings in `data/settings.json` override `.env`. Reset deletes the override.
 - Visible copy and docs: no em or en dashes. Run `lint:copy` via `python tasks.py lint`.
 - Host/Origin must match the app. No CORS. Security headers on every response.
+- Phase 2 MCP is a thin HTTP client of the Phase 1 API. Keep OCR logic in the API.
+- MCP logs to stderr only (SafeFormatter). Nothing but protocol on stdout.
+- Never log full paths, file bytes, base64, or extracted text from `ocr_mcp`.
 
 ## Do not
 
 - No Docker, compose, or container docs.
 - No Python or Node version pins, `.python-version`, or `requires-python`.
-- No MCP server or `.cursor/mcp.json` in Phase 1.
-- No auth, job queue, Docling, GLM-OCR switch, or GitHub Actions in Phase 1.
+- No auth, job queue, Docling, GLM-OCR switch, or GitHub Actions in Phase 1 or Phase 2.
+- No HTTP or SSE MCP transport; stdio only.
 - Never commit secrets, personal paths, usernames, or IPs.
 - Never log file contents, extracted text, base64, or full filenames.
+- Do not edit `app/` or the API contract for MCP work unless explicitly approved.
 
 ## Commands
 
@@ -37,4 +42,5 @@ python tasks.py lint
 python tasks.py test
 python tasks.py build
 python tasks.py start
+python tasks.py mcp-check
 ```

@@ -49,6 +49,7 @@ python tasks.py start
 | `python tasks.py test` | pytest |
 | `python tasks.py lint` | ruff check, ruff format --check, lint:copy |
 | `python tasks.py build` | lint, test, compileall, static file check |
+| `python tasks.py mcp-check` | stdio smoke test: list MCP tools and call `ocr_health` |
 
 ## Environment
 
@@ -155,6 +156,76 @@ One JSON object per page (`type=page`), then a final `type=done` object with the
 - Uploads are size-limited and typed by magic bytes. Temp files are cleaned up.
 - Logs never include extracted text, base64, or full filenames.
 
-## Phase 2: MCP
+## Phase 2: MCP (Cursor)
 
-After this API is confirmed working, Phase 2 adds a thin Cursor MCP server (`ocr_file`, `ocr_health`) that wraps these endpoints. Not included in Phase 1.
+Thin stdio MCP server that wraps this HTTP API. OCR still runs in the API; the MCP process only uploads local files and streams NDJSON progress.
+
+### Tools
+
+| Tool | What it does |
+| --- | --- |
+| `ocr_file` | Absolute path to a `.pdf` / `.png` / `.jpg` / `.jpeg` / `.webp`. Optional `pages` (`1-3,5`) and `forceOcr`. Returns extracted text plus structured metadata (pages without repeating text). |
+| `ocr_health` | Health JSON plus a plain sentence (API down, LM Studio unreachable, or model not loaded). |
+| `ocr_list_models` | `{models:[...]}` from `/api/models`. |
+
+### Start the API first
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python tasks.py start
+```
+
+Keep LM Studio running with your OCR model loaded.
+
+### Project setup (this repo)
+
+1. Open this repository folder in Cursor.
+2. The committed [`.cursor/mcp.json`](.cursor/mcp.json) points at `${workspaceFolder}/.venv/Scripts/python.exe` with `OCR_API_URL=http://127.0.0.1:3000`.
+3. Enable the `local-pdf-ocr` server in Cursor Customize / MCP settings.
+4. If it fails to start, open MCP Logs.
+
+### Global setup (other projects)
+
+Windows (`%USERPROFILE%\.cursor\mcp.json`), use a placeholder absolute path to this repo's venv Python:
+
+```json
+{
+  "mcpServers": {
+    "local-pdf-ocr": {
+      "command": "C:\\path\\to\\local-pdf-ocr\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "ocr_mcp"],
+      "env": {
+        "OCR_API_URL": "http://127.0.0.1:3000"
+      }
+    }
+  }
+}
+```
+
+macOS / Linux use `.venv/bin/python` instead of `.venv/Scripts/python.exe`.
+
+### MCP environment
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `OCR_API_URL` | built from `HOST`/`PORT` or `http://127.0.0.1:3000` | Wins when set. `http` or `https` only; no credentials or query. |
+| `OCR_ALLOWED_ROOTS` | unset (no extra root filter) | `os.pathsep`-separated absolute roots; resolved paths must sit inside one. |
+| `OCR_BUSY_RETRIES` | `2` | Extra attempts after HTTP 503 busy. |
+
+### Quick test
+
+```powershell
+python tasks.py mcp-check
+```
+
+Then in Cursor ask: `Use ocr_file on C:\path\to\sample.pdf`.
+
+### MCP troubleshooting
+
+| Symptom | What to try |
+| --- | --- |
+| API not running / connection refused | Start the API with `python tasks.py start` |
+| 403 forbidden_host | Set `OCR_API_URL` to `http://127.0.0.1:<port>` or the configured `HOST` |
+| OCR is busy | Wait and retry; raise `OCR_BUSY_RETRIES` only if needed |
+| Long PDFs time out | Pages must keep arriving; raise `LMSTUDIO_TIMEOUT_S` on the API |
+| Output too large | Pass `pages` to OCR a subset |
