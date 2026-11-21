@@ -42,7 +42,7 @@ class HostOriginMiddleware(BaseHTTPMiddleware):
         cfg = request.app.state.config
         host = request.headers.get("host")
         origin = request.headers.get("origin")
-        if not host_allowed(host, cfg.host, cfg.port):
+        if not host_allowed(host, cfg.host, cfg.port, cfg.allowed_hosts):
             return JSONResponse(
                 status_code=403,
                 content={
@@ -53,7 +53,7 @@ class HostOriginMiddleware(BaseHTTPMiddleware):
                 },
                 headers=SECURITY_HEADERS,
             )
-        if not origin_allowed(origin, cfg.host, cfg.port):
+        if not origin_allowed(origin, cfg.host, cfg.port, cfg.allowed_hosts):
             return JSONResponse(
                 status_code=403,
                 content={

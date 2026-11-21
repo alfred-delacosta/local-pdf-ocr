@@ -83,6 +83,7 @@ def _defaults_from_config(cfg: AppConfig) -> dict[str, Any]:
     return {
         "host": cfg.host,
         "port": cfg.port,
+        "allowedHosts": list(cfg.allowed_hosts),
         "lmstudioBaseUrl": cfg.lmstudio_base_url,
         "modelId": cfg.model_id,
         "lmstudioTimeoutS": cfg.lmstudio_timeout_s,
