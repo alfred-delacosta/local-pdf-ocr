@@ -7,13 +7,20 @@ import json
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, Header, Request, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
+from app import preview_store
 from app.config import AppConfig, load_config
 from app.extract import run_extract, run_extract_events
 from app.lmstudio import LMStudioClient, LMStudioError
 from app.logging_safe import get_logger
-from app.security import UploadValidationError, extract_lock, read_upload_limited
+from app.pdf_router import image_to_png_bytes, load_image_bytes, render_page_png
+from app.security import (
+    UploadValidationError,
+    detect_file_type,
+    extract_lock,
+    read_upload_limited,
+)
 from app.settings_store import (
     SettingsValidationError,
     get_runtime_settings,
@@ -112,6 +119,56 @@ def _parse_force_ocr(raw: str | bool | None) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _register_preview(data: bytes) -> None:
+    """Validate magic bytes and replace the last-upload preview snapshot."""
+    detected = detect_file_type(data)
+    if detected.kind == "pdf":
+        import pypdfium2 as pdfium
+
+        pdf = pdfium.PdfDocument(data)
+        try:
+            page_count = len(pdf)
+        finally:
+            pdf.close()
+    else:
+        page_count = 1
+    preview_store.set_snapshot(data, detected.kind, page_count)
+
+
+@router.get("/preview/pages/{page}", response_model=None)
+def preview_page(request: Request, page: int) -> Response | JSONResponse:
+    snapshot = preview_store.get_snapshot()
+    if snapshot is None:
+        return error_response(404, "preview_unavailable", "No page preview is available.")
+    if page < 1 or page > snapshot.page_count:
+        return error_response(404, "page_not_found", "Requested page is out of range.")
+
+    cfg = get_cfg(request)
+    try:
+        if snapshot.kind == "pdf":
+            import pypdfium2 as pdfium
+
+            pdf = pdfium.PdfDocument(snapshot.data)
+            try:
+                pdf_page = pdf[page - 1]
+                try:
+                    png = render_page_png(pdf_page, cfg.render_dpi, cfg.render_max_edge)
+                finally:
+                    pdf_page.close()
+            finally:
+                pdf.close()
+        else:
+            if page != 1:
+                return error_response(404, "page_not_found", "Requested page is out of range.")
+            img = load_image_bytes(snapshot.data)
+            png = image_to_png_bytes(img, cfg.render_max_edge)
+    except Exception:
+        log.exception("preview_render_failed page=%s", page)
+        return error_response(500, "preview_failed", "Could not render page preview.")
+
+    return Response(content=png, media_type="image/png")
+
+
 @router.post("/extract", response_model=None)
 async def extract(
     request: Request,
@@ -131,9 +188,11 @@ async def extract(
 
     wants_ndjson = accept is not None and "application/x-ndjson" in accept.lower()
     stream_owns_lock = False
+    preview_store.clear()
 
     try:
         data = await read_upload_limited(file, cfg.max_upload_bytes)
+        _register_preview(data)
         force = _parse_force_ocr(forceOcr)
         client = make_client(request)
         filename = file.filename
