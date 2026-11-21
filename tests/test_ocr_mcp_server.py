@@ -24,6 +24,43 @@ def test_tools_listed_with_stable_names():
     assert names == ["ocr_file", "ocr_health", "ocr_list_models"]
 
 
+def test_ocr_file_advertises_absolute_path():
+    async def _run():
+        tools = await mcp.list_tools()
+        return next(t for t in tools if t.name == "ocr_file")
+
+    tool = asyncio.run(_run())
+    assert "absolute" in (tool.description or "").lower()
+    path_schema = tool.input_schema["properties"]["path"]
+    path_desc = path_schema.get("description") or ""
+    assert "absolute" in path_desc.lower()
+    assert "relative" in path_desc.lower()
+
+
+@respx.mock
+def test_ocr_file_rejects_relative_path(monkeypatch):
+    monkeypatch.setenv("OCR_API_URL", "http://127.0.0.1:3000")
+    respx.get("http://127.0.0.1:3000/api/settings").mock(
+        return_value=httpx.Response(
+            200,
+            json={"defaults": {"maxUploadMb": 10, "lmstudioTimeoutS": 120}},
+        )
+    )
+
+    async def _run():
+        try:
+            await mcp.call_tool("ocr_file", {"path": "relative.pdf"})
+            return None
+        except Exception as exc:
+            return str(exc)
+
+    message = asyncio.run(_run())
+    assert message is not None
+    assert "invalid_path" in message
+    assert "absolute" in message.lower()
+    assert "Traceback" not in message
+
+
 @respx.mock
 def test_ocr_health_tool_via_in_memory_call(monkeypatch):
     monkeypatch.setenv("OCR_API_URL", "http://127.0.0.1:3000")

@@ -89,7 +89,10 @@ def validate_ocr_path(
 
     expanded = Path(cleaned).expanduser()
     if not expanded.is_absolute():
-        raise PathValidationError("invalid_path", "path must be absolute.")
+        raise PathValidationError(
+            "invalid_path",
+            "path must be an absolute filesystem path; relative paths are not allowed.",
+        )
 
     try:
         resolved = expanded.resolve(strict=True)

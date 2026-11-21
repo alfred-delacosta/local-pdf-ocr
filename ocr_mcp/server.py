@@ -3,12 +3,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent
+from pydantic import Field
 
 from app.logging_safe import configure_logging, get_logger
 from ocr_mcp.client import ApiClientError, OcrApiClient
@@ -96,16 +97,34 @@ async def ocr_list_models() -> dict[str, Any]:
 
 @mcp.tool(name="ocr_file")
 async def ocr_file(
-    path: str,
+    path: Annotated[
+        str,
+        Field(
+            description=(
+                "Absolute filesystem path to a local .pdf, .png, .jpg, .jpeg, or .webp file. "
+                "Relative paths are rejected. Example: C:\\Users\\me\\Documents\\scan.pdf"
+            ),
+        ),
+    ],
     ctx: Context,
-    pages: str | None = None,
-    forceOcr: bool | None = None,
+    pages: Annotated[
+        str | None,
+        Field(
+            description='Optional page selection using API syntax (for example "1-3,5").',
+        ),
+    ] = None,
+    forceOcr: Annotated[
+        bool | None,
+        Field(
+            description="When true, skip the PDF text layer and OCR every selected page.",
+        ),
+    ] = None,
 ) -> CallToolResult:
-    """OCR a local PDF or image via the Phase 1 HTTP API.
+    """OCR a local PDF or image. Requires an absolute filesystem path.
 
-    path must be an absolute filesystem path. Optional pages uses the same
-    syntax as the API (for example "1-3,5"). Set forceOcr true to skip the
-    PDF text layer.
+    path must be an absolute filesystem path. Relative paths are rejected.
+    Optional pages uses the same syntax as the API (for example "1-3,5").
+    Set forceOcr true to skip the PDF text layer.
     """
     client = _client()
     try:
