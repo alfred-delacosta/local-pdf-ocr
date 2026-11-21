@@ -311,6 +311,44 @@ textarea:focus-visible {
   min-height: var(--target);
 }
 
+.page-list li.page-row {
+  cursor: pointer;
+  transition: border-color var(--motion) ease, background-color var(--motion) ease;
+}
+
+.page-list li.page-row:hover {
+  border-color: var(--focus);
+}
+
+.page-list li.page-row:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.page-list li.page-row.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.page-action {
+  min-height: 2.25rem;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.9rem;
+}
+
+.page-error {
+  flex: 1 1 100%;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
 .tag {
   display: inline-flex;
   align-items: center;

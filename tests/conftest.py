@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 import app.config as config_mod
+import app.preview_store as preview_store
 import app.settings_store as settings_mod
 from app.main import create_app
 
@@ -125,6 +126,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("MAX_UPLOAD_MB", "1")
     monkeypatch.setenv("MAX_PAGES", "5")
     monkeypatch.setenv("LMSTUDIO_TIMEOUT_S", "5")
+    preview_store.clear()
     app = create_app()
     with TestClient(app, base_url="http://127.0.0.1:3000") as test_client:
         yield test_client
+    preview_store.clear()

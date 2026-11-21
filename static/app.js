@@ -11,8 +11,12 @@
   var pageList = document.getElementById("page-list");
   var resultText = document.getElementById("result-text");
   var copyBtn = document.getElementById("copy-btn");
+  var resetTextBtn = document.getElementById("reset-text-btn");
   var copyLive = document.getElementById("copy-live");
   var copyVisible = document.getElementById("copy-visible");
+  var pageTexts = {};
+  var combinedText = "";
+  var selectedPage = null;
   var healthBadge = document.getElementById("health-badge");
   var lmUrl = document.getElementById("lm-url");
   var modelId = document.getElementById("model-id");
@@ -168,14 +172,56 @@
     pageList.innerHTML = "";
     resultText.value = "";
     copyBtn.disabled = true;
+    resetTextBtn.disabled = true;
     copyLive.textContent = "";
     copyVisible.textContent = "";
+    pageTexts = {};
+    combinedText = "";
+    selectedPage = null;
+  }
+
+  function syncResultActions() {
+    copyBtn.disabled = !resultText.value;
+    resetTextBtn.disabled = !combinedText;
+  }
+
+  function setSelectedPage(page) {
+    selectedPage = page;
+    var rows = pageList.querySelectorAll("li[data-page]");
+    rows.forEach(function (row) {
+      var rowPage = Number(row.getAttribute("data-page"));
+      row.classList.toggle("selected", page !== null && rowPage === page);
+    });
+  }
+
+  function showPageText(page) {
+    var text = Object.prototype.hasOwnProperty.call(pageTexts, page)
+      ? pageTexts[page]
+      : "";
+    resultText.value = text;
+    syncResultActions();
+    setSelectedPage(page);
+  }
+
+  function showCombinedText() {
+    resultText.value = combinedText;
+    syncResultActions();
+    setSelectedPage(null);
   }
 
   function addPageRow(event) {
+    var page = event.page;
+    pageTexts[page] = event.text || "";
+
     var li = document.createElement("li");
+    li.setAttribute("data-page", String(page));
+    li.className = "page-row";
+    li.tabIndex = 0;
+    li.setAttribute("role", "button");
+    li.setAttribute("aria-label", "Show text for page " + page);
+
     var label = document.createElement("strong");
-    label.textContent = "Page " + event.page;
+    label.textContent = "Page " + page;
     var tag = document.createElement("span");
     tag.className = "tag " + (event.error ? "error" : event.source);
     tag.textContent = event.error ? "error" : event.source;
@@ -183,9 +229,46 @@
     li.appendChild(tag);
     if (event.error) {
       var err = document.createElement("span");
+      err.className = "page-error";
       err.textContent = event.error;
       li.appendChild(err);
     }
+
+    var actions = document.createElement("div");
+    actions.className = "page-actions";
+
+    var showTextBtn = document.createElement("button");
+    showTextBtn.type = "button";
+    showTextBtn.className = "btn secondary page-action";
+    showTextBtn.textContent = "Show text";
+    showTextBtn.addEventListener("click", function (clickEvent) {
+      clickEvent.stopPropagation();
+      showPageText(page);
+    });
+
+    var viewPngBtn = document.createElement("button");
+    viewPngBtn.type = "button";
+    viewPngBtn.className = "btn secondary page-action";
+    viewPngBtn.textContent = "View PNG";
+    viewPngBtn.addEventListener("click", function (clickEvent) {
+      clickEvent.stopPropagation();
+      window.open("/api/preview/pages/" + page, "_blank");
+    });
+
+    actions.appendChild(showTextBtn);
+    actions.appendChild(viewPngBtn);
+    li.appendChild(actions);
+
+    li.addEventListener("click", function () {
+      showPageText(page);
+    });
+    li.addEventListener("keydown", function (keyEvent) {
+      if (keyEvent.key === "Enter" || keyEvent.key === " ") {
+        keyEvent.preventDefault();
+        showPageText(page);
+      }
+    });
+
     pageList.appendChild(li);
   }
 
@@ -223,6 +306,10 @@
     } else {
       announce(copyTextFallback(text));
     }
+  });
+
+  resetTextBtn.addEventListener("click", function () {
+    showCombinedText();
   });
 
   function processFile(file) {
@@ -292,8 +379,8 @@
               progressSummary.textContent =
                 "Page " + pageCountSeen + " finished (" + (event.source || "") + ")";
             } else if (event.type === "done") {
-              resultText.value = event.text || "";
-              copyBtn.disabled = !resultText.value;
+              combinedText = event.text || "";
+              showCombinedText();
               progressSummary.textContent =
                 "Done. " +
                 (event.pages ? event.pages.length : pageCountSeen) +
