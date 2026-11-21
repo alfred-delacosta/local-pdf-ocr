@@ -17,6 +17,7 @@ dependencies = [
   "pypdfium2>=4.30.0",
   "Pillow>=10.0.0",
   "python-multipart>=0.0.9",
+  "mcp>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -27,7 +28,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["app*"]
+include = ["app*", "ocr_mcp*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

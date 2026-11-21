@@ -1,8 +1,9 @@
 # Copyright Advanced Software and AI Solutions LLC
-"""Task runner: python tasks.py <dev|start|test|lint|build>."""
+"""Task runner: python tasks.py <dev|start|test|lint|build|mcp-check>."""
 
 from __future__ import annotations
 
+import asyncio
 import compileall
 import re
 import subprocess
@@ -50,9 +51,11 @@ def lint_copy() -> int:
     bad: list[str] = []
     roots = [
         ROOT / "app",
+        ROOT / "ocr_mcp",
         ROOT / "static",
         ROOT / "tests",
         ROOT / "docs",
+        ROOT / ".cursor",
         ROOT / "README.md",
         ROOT / "AGENTS.md",
         ROOT / "tasks.py",
@@ -72,6 +75,7 @@ def lint_copy() -> int:
                     ".js",
                     ".txt",
                     ".example",
+                    ".json",
                 }:
                     files.append(path)
     for path in files:
@@ -119,10 +123,11 @@ def check_static_refs() -> int:
 
 
 def cmd_lint() -> int:
-    code = run([sys.executable, "-m", "ruff", "check", "app", "tests", "tasks.py"])
+    targets = ["app", "ocr_mcp", "tests", "tasks.py"]
+    code = run([sys.executable, "-m", "ruff", "check", *targets])
     if code:
         return code
-    code = run([sys.executable, "-m", "ruff", "format", "--check", "app", "tests", "tasks.py"])
+    code = run([sys.executable, "-m", "ruff", "format", "--check", *targets])
     if code:
         return code
     return lint_copy()
@@ -139,9 +144,10 @@ def cmd_build() -> int:
     code = cmd_test()
     if code:
         return code
-    if not compileall.compile_dir(str(ROOT / "app"), quiet=1):
-        print("compileall failed")
-        return 1
+    for package in ("app", "ocr_mcp"):
+        if not compileall.compile_dir(str(ROOT / package), quiet=1):
+            print(f"compileall failed for {package}")
+            return 1
     return check_static_refs()
 
 
@@ -178,9 +184,45 @@ def cmd_start() -> int:
     )
 
 
+async def _mcp_check_async() -> int:
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "ocr_mcp"],
+        cwd=str(ROOT),
+    )
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            listed = await session.list_tools()
+            names = sorted(t.name for t in listed.tools)
+            print("tools:", ", ".join(names))
+            result = await session.call_tool("ocr_health", {})
+            print("ocr_health:")
+            for block in result.content:
+                text = getattr(block, "text", None)
+                if text is not None:
+                    print(text)
+            if result.is_error:
+                return 1
+    return 0
+
+
+def cmd_mcp_check() -> int:
+    print("+ mcp-check via python -m ocr_mcp")
+    try:
+        return asyncio.run(_mcp_check_async())
+    except Exception as exc:
+        print(f"mcp-check failed: {exc}")
+        return 1
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 2 or argv[1] not in {"dev", "start", "test", "lint", "build"}:
-        print("Usage: python tasks.py <dev|start|test|lint|build>")
+    allowed = {"dev", "start", "test", "lint", "build", "mcp-check"}
+    if len(argv) != 2 or argv[1] not in allowed:
+        print("Usage: python tasks.py <dev|start|test|lint|build|mcp-check>")
         return 2
     name = argv[1]
     if name == "dev":
@@ -193,6 +235,8 @@ def main(argv: list[str]) -> int:
         return cmd_lint()
     if name == "build":
         return cmd_build()
+    if name == "mcp-check":
+        return cmd_mcp_check()
     return 2
 
 
