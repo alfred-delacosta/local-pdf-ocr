@@ -60,10 +60,34 @@ def _env_str(name: str, default: str) -> str:
     return raw.strip()
 
 
+def parse_allowed_hosts(raw: str | None) -> tuple[str, ...]:
+    """Parse comma-separated hostnames for Host/Origin checks."""
+    if raw is None or str(raw).strip() == "":
+        return ()
+    names: list[str] = []
+    seen: set[str] = set()
+    for part in str(raw).split(","):
+        item = part.strip().strip('"').strip("'")
+        if not item:
+            continue
+        # Allow optional :port; Host checks add the app port themselves.
+        if item.count(":") == 1 and not item.startswith("["):
+            host_part, _, maybe_port = item.partition(":")
+            if maybe_port.isdigit():
+                item = host_part
+        normalized = item.strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        names.append(normalized)
+    return tuple(names)
+
+
 @dataclass(frozen=True)
 class AppConfig:
     host: str
     port: int
+    allowed_hosts: tuple[str, ...]
     lmstudio_base_url: str
     model_id: str
     lmstudio_timeout_s: int
@@ -83,6 +107,7 @@ def load_config() -> AppConfig:
     return AppConfig(
         host=_env_str("HOST", DEFAULT_HOST),
         port=_env_int("PORT", DEFAULT_PORT),
+        allowed_hosts=parse_allowed_hosts(os.environ.get("ALLOWED_HOSTS")),
         lmstudio_base_url=_env_str("LMSTUDIO_BASE_URL", DEFAULT_LMSTUDIO_BASE_URL).rstrip("/"),
         model_id=_env_str("MODEL_ID", DEFAULT_MODEL_ID),
         lmstudio_timeout_s=_env_int("LMSTUDIO_TIMEOUT_S", DEFAULT_LMSTUDIO_TIMEOUT_S),

@@ -66,33 +66,69 @@ async def read_upload_limited(upload, max_bytes: int) -> bytes:
     return b"".join(chunks)
 
 
+BIND_ANY_HOSTS = frozenset({"0.0.0.0", "::", "[::]"})
+
+
 def _normalize_host(value: str) -> str:
     return value.strip().lower()
 
 
-def host_allowed(request_host: str | None, app_host: str, app_port: int) -> bool:
-    if not request_host:
-        return False
-    host = _normalize_host(request_host)
+def public_host_names(
+    app_host: str,
+    allowed_hosts: tuple[str, ...] | list[str] | None = None,
+) -> set[str]:
+    """Hostnames accepted in Host/Origin headers.
+
+    HOST is the bind address. Wildcard binds (0.0.0.0 / ::) are not treated as
+    public names. Loopback is always allowed. ALLOWED_HOSTS adds LAN DNS names.
+    """
     names = {
-        _normalize_host(app_host),
         "localhost",
         "127.0.0.1",
         "[::1]",
         "::1",
     }
-    allowed = set()
-    for name in names:
+    bind = _normalize_host(app_host or "")
+    if bind and bind not in BIND_ANY_HOSTS:
+        names.add(bind)
+    for item in allowed_hosts or ():
+        cleaned = _normalize_host(str(item))
+        if cleaned and cleaned not in BIND_ANY_HOSTS:
+            names.add(cleaned)
+    return names
+
+
+def host_allowed(
+    request_host: str | None,
+    app_host: str,
+    app_port: int,
+    allowed_hosts: tuple[str, ...] | list[str] | None = None,
+) -> bool:
+    if not request_host:
+        return False
+    host = _normalize_host(request_host)
+    allowed: set[str] = set()
+    for name in public_host_names(app_host, allowed_hosts):
         allowed.add(name)
         allowed.add(f"{name}:{app_port}")
     return host in allowed
 
 
-def origin_allowed(origin: str | None, app_host: str, app_port: int) -> bool:
+def origin_allowed(
+    origin: str | None,
+    app_host: str,
+    app_port: int,
+    allowed_hosts: tuple[str, ...] | list[str] | None = None,
+) -> bool:
     if origin is None or origin == "":
         return True
     origin = origin.strip().rstrip("/")
-    names = {_normalize_host(app_host), "localhost", "127.0.0.1"}
+    # Origin URLs rarely use bracketed IPv6; keep loopback DNS/IP names.
+    names = {
+        name for name in public_host_names(app_host, allowed_hosts) if name not in {"[::1]", "::1"}
+    }
+    names.add("localhost")
+    names.add("127.0.0.1")
     candidates: set[str] = set()
     for name in names:
         candidates.add(f"http://{name}:{app_port}")
