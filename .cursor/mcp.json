@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "local-pdf-ocr": {
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["-m", "ocr_mcp"],
+      "env": {
+        "OCR_API_URL": "http://127.0.0.1:3000"
+      }
+    }
+  }
+}
