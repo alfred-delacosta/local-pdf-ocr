@@ -33,7 +33,10 @@ def test_quotes_stripped(tmp_path):
 def test_relative_rejected(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _write(tmp_path, "a.pdf")
-    with pytest.raises(PathValidationError, match="absolute"):
+    with pytest.raises(
+        PathValidationError,
+        match="path must be an absolute filesystem path; relative paths are not allowed",
+    ):
         validate_ocr_path("a.pdf", max_upload_mb=1)
 
 
