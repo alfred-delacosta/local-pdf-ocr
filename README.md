@@ -57,8 +57,9 @@ Copy `.env.example` to `.env`. Defaults:
 
 | Key | Default | Notes |
 | --- | --- | --- |
-| `HOST` | `127.0.0.1` | Binding `0.0.0.0` or a LAN IP exposes the app with no login |
+| `HOST` | `127.0.0.1` | uvicorn bind address. `0.0.0.0` listens on all interfaces (no login) |
 | `PORT` | `3000` | Example: set `PORT=4000` then start again |
+| `ALLOWED_HOSTS` | (empty) | Comma-separated DNS names for Host/Origin when binding `0.0.0.0` (example: `ocr.lan`) |
 | `LMSTUDIO_BASE_URL` | `http://127.0.0.1:1234/v1` | Trailing slash trimmed |
 | `MODEL_ID` | `LightOnOCR-3-0.8B` | UI can list and pick from `/api/models` |
 | `LMSTUDIO_TIMEOUT_S` | `180` | Per page |
@@ -146,13 +147,13 @@ One JSON object per page (`type=page`), then a final `type=done` object with the
 | Health shows LM Studio unreachable | Start the LM Studio server; confirm URL in Settings |
 | Timeouts on large scans | Raise `LMSTUDIO_TIMEOUT_S`, or OCR fewer pages |
 | VRAM / out of memory | Eject other models; lower `RENDER_DPI` (for example 150) |
-| Wrong Host / Origin errors | Use the same host and port the app binds to |
+| Wrong Host / Origin errors | Use `127.0.0.1` / `localhost`, or set `ALLOWED_HOSTS` to your Pi-hole / LAN DNS name when `HOST=0.0.0.0` |
 | Upload rejected | Check magic bytes (real PNG/JPEG/WebP/PDF) and `MAX_UPLOAD_MB` |
 
 ## Security notes
 
 - No login. Keep `HOST=127.0.0.1` unless you accept LAN exposure.
-- Host and Origin must match the app. No CORS.
+- Host and Origin must match loopback, the non-wildcard `HOST`, or `ALLOWED_HOSTS`. No CORS.
 - Uploads are size-limited and typed by magic bytes. Temp files are cleaned up.
 - Logs never include extracted text, base64, or full filenames.
 
