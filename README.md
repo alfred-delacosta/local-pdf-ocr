@@ -161,6 +161,8 @@ One JSON object per page (`type=page`), then a final `type=done` object with the
 
 Thin stdio MCP server that wraps this HTTP API. OCR still runs in the API; the MCP process only uploads local files and streams NDJSON progress.
 
+Full setup for Cursor and Hermes: [docs/mcp-setup.md](docs/mcp-setup.md).
+
 ### Tools
 
 | Tool | What it does |
