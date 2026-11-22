@@ -115,13 +115,68 @@ Use the **Connect to a custom MCP** dialog:
 8. Working directory: `C:\path\to\local-pdf-ocr`
 9. Save
 
-## 7. Troubleshooting
+## 7. Hermes to a LAN API host
+
+Hermes does not speak MCP over HTTP to the other machine. Hermes still starts `ocr_mcp` locally over STDIO. That local process calls the Phase 1 HTTP API on the LAN host. Example API URL: `http://dell-aio.local:4001`.
+
+### On the API host (`dell-aio`)
+
+1. Clone this repo, create `.venv`, and install (`pip install -e ".[dev]"` or use `.\start.ps1` after the venv exists).
+2. Run LM Studio on this host with the OCR model loaded and its server started (default `http://127.0.0.1:1234/v1` on this host).
+3. Set `.env` so the API listens on the LAN and accepts the DNS name:
+
+```env
+HOST=0.0.0.0
+PORT=4001
+ALLOWED_HOSTS=dell-aio.local
+```
+
+Without `ALLOWED_HOSTS=dell-aio.local`, LAN clients get 403 `forbidden_host`.
+
+4. Start the API: `.\start.ps1` or `python tasks.py start`.
+5. From another machine on the LAN, open `http://dell-aio.local:4001/api/health`.
+
+You do not need Hermes or the STDIO MCP process on the API host for this setup.
+
+### On the Hermes machine
+
+1. Keep a local clone of this repo with `.venv` and `pip install -e ".[dev]"`. Hermes launches `python -m ocr_mcp` on **this** machine.
+2. Hermes Desktop: same dialog as section 6, with these values:
+
+   - Name: `local-pdf-ocr` (or `local-pdf-ocr-dell-aio` if you also keep a local-API entry)
+   - Type: STDIO
+   - Command: `C:\path\to\local-pdf-ocr\.venv\Scripts\python.exe`
+   - Arguments: `-m` and `ocr_mcp` as two separate entries
+   - Env: `OCR_API_URL` = `http://dell-aio.local:4001`
+   - Passthrough: empty
+   - Working directory: `C:\path\to\local-pdf-ocr` (the repo folder only, not the `.exe` path)
+   - Save
+
+3. Hermes CLI: same shape as section 5, with the LAN URL:
+
+```yaml
+mcp_servers:
+  local-pdf-ocr-dell-aio:
+    command: C:/path/to/local-pdf-ocr/.venv/Scripts/python.exe
+    args: ["-m", "ocr_mcp"]
+    cwd: C:/path/to/local-pdf-ocr
+    env:
+      OCR_API_URL: http://dell-aio.local:4001
+```
+
+Then `/reload-mcp` or a new chat.
+
+4. `ocr_file` needs absolute paths on the Hermes machine (files are read locally, then uploaded to the API). Paths on the Dell disk are not used unless Hermes runs there too.
+
+## 8. Troubleshooting
 
 | Symptom | What to try |
 | --- | --- |
 | API not running / connection refused | Start with `.\start.ps1` or `python tasks.py start`. Check `/api/health`. |
 | Wrong Python path / missing `.venv` | `python -m venv .venv`, then `pip install -e ".[dev]"`. Point command at `.venv\Scripts\python.exe` with an absolute path. |
+| `NotADirectoryError` / WinError 267 | Working directory must be the repo folder (`C:\path\to\local-pdf-ocr`), not `python.exe`, not the API URL, and not a quoted or invalid path. |
 | 403 `forbidden_host` | Point `OCR_API_URL` at `http://127.0.0.1:<port>`, the configured `HOST`, or a name listed in `ALLOWED_HOSTS`. |
+| LAN API up but 403 | On the API host, set `ALLOWED_HOSTS` to the DNS name used in `OCR_API_URL` (example: `dell-aio.local`). |
 | Path refused | Must be absolute; not UNC/device; allowed extension; under size limit; inside `OCR_ALLOWED_ROOTS` when that env is set. |
 | OCR busy | One extraction at a time (API waits then 503). Raise `OCR_BUSY_RETRIES` only if needed. |
 | LM Studio unreachable / model not loaded | Check `LMSTUDIO_BASE_URL`, `MODEL_ID`, run `ocr_health`, or use the web UI Settings. |
